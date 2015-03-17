@@ -24,13 +24,10 @@
 --
    
 -- Standard library imports --
-local abs = math.abs
 local acos = math.acos
 local cos = math.cos
 local exp = math.exp
 local log = math.log
-local max = math.max
-local min = math.min
 local pi = math.pi
 local sin = math.sin
 local sqrt = math.sqrt
@@ -40,10 +37,11 @@ local robust = require("tektite_core.number.robust")
 
 -- Cached module references --
 local _Add_
-local _AngleBetween_
+local _Add_Scaled_
 local _Conjugate_
 local _Dot_
 local _Exp_
+local _FromAxisAngle_
 local _Inverse_
 local _Length_
 local _Log_
@@ -51,6 +49,7 @@ local _Multiply_
 local _Negate_
 local _Normalize_
 local _Scale_
+local _Slerp_
 local _SquadAuxQuats_
 local _SquadQ2S2_ 
 
@@ -77,15 +76,17 @@ function M.Add_Scaled (qout, q1, q2, k)
 	return qout
 end
 
--- --
+-- Forward references --
 local AuxAngleBetween
 
 do
-	local A1, A2 = {}, {}
+	local A1, A2, TwoPi = {}, {}, 2 * pi
 
 	--- DOCME
 	function M.AngleBetween (q1, q2)
-		return AuxAngleBetween(_Normalize_(A1, q1), _Normalize_(A2, q2))
+		local angle = 2 * AuxAngleBetween(_Normalize_(A1, q1), _Normalize_(A2, q2))
+
+		return angle > pi and TwoPi - angle or angle
 	end
 end
 
@@ -97,6 +98,11 @@ function M.Conjugate (qout, q)
 	qout.w = q.w
 
 	return qout
+end
+
+--- DOCME
+function M.Difference (qout, q1, q2)
+	return _Multiply_(qout, _Conjugate_(qout, q1), q2)
 end
 
 --- DOCME
@@ -112,15 +118,56 @@ function M.Exp (qout, q)
 	local qx, qy, qz, ew = q.x, q.y, q.z, exp(q.w)
 	local vnorm = sqrt(qx^2 + qy^2 + qz^2)
 
-	if vnorm > 1e-9 then
+	if vnorm > 1e-6 then
 		local coeff = ew * robust.SinOverX(vnorm)
 
 		qout.w, qout.x, qout.y, qout.z = ew * cos(vnorm), coeff * qx, coeff * qy, coeff * qz
 	else
 		qout.w, qout.x, qout.y, qout.z = ew, 0, 0, 0   
-    end
+	end
 
 	return qout
+end
+
+--- DOCME
+function M.FromAxisAngle (qout, angle, vx, vy, vz)
+	angle = .5 * angle
+
+	local coeff = sin(angle) / sqrt(vx^2 + vy^2 + vz^2)
+
+	qout.w, qout.x, qout.y, qout.z = cos(angle), coeff * vx, coeff * vy, coeff * vz
+
+	return qout
+end
+
+do
+	local Order, Axis = {
+		xyz = function(x, y, z) return x, y, z end,
+		xzy = function(x, y, z) return x, z, y end,
+		yxz = function(x, y, z) return y, x, z end,
+		yzx = function(x, y, z) return y, z, x end,
+		zxy = function(x, y, z) return z, x, y end,
+		zyx = function(x, y, z) return z, y, x end
+	}, {}
+
+	--- DOCME
+	function M.FromEulerAngles (qout, x, y, z, method)
+		local order = Order[method] or Order.xyz
+
+		x, y, z = order(x, y, z)
+
+		if method == "yzx" or method == "zxy" then -- axes are swapped in these two cases
+			order = Order[method == "yzx" and "zxy" or "yzx"]
+		end
+
+		_FromAxisAngle_(qout, z, order(0, 0, 1))
+		_FromAxisAngle_(Axis, y, order(0, 1, 0))
+		_Multiply_(qout, Axis, qout)
+		_FromAxisAngle_(Axis, x, order(1, 0, 0))
+		_Multiply_(qout, Axis, qout)
+
+		return qout
+	end
 end
 
 --- DOCME
@@ -142,10 +189,10 @@ function M.Log (qout, q)
 	local sqr = qx^2 + qy^2 + qz^2
 	local vnorm = sqrt(sqr)
 
-	if vnorm > 1e-9 then
+	if vnorm > 1e-6 then
 		local qw = q.w
 		local mag = sqrt(sqr + qw^2)
-		local coeff = max(min(qw / mag, 1), -1) / vnorm
+		local coeff = acos(qw / mag) / vnorm
 
 		qout.w, qout.x, qout.y, qout.z = log(mag), coeff * qx, coeff * qy, coeff * qz
 	else
@@ -162,7 +209,7 @@ function M.Multiply (qout, q1, q2)
 
 	qout.x = w1 * x2 + w2 * x1 + y1 * z2 - y2 * z1
 	qout.y = w1 * y2 + w2 * y1 + z1 * x2 - z2 * x1
-	qout.z = w1 * z2 + w2 * x1 + x1 * y2 - x2 * y1
+	qout.z = w1 * z2 + w2 * z1 + x1 * y2 - x2 * y1
 	qout.w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
 
 	return qout
@@ -194,35 +241,39 @@ function M.Scale (qout, q, k)
 end
 
 do
-	local Qf, Qt = {}, {}
-
-	--
-	local function AuxSlerp (qout, q1, q2, t)
-		if _Dot_(q1, q2) < 0 then
-			_Negate_(Qf, q1)
-
-			q1 = Qf
-		end
-
-		local theta = _AngleBetween_(q1, q2)
-		local denom = robust.SinOverX(theta)
-		local k1, k2 = robust.Slerp(1 - t, theta, denom) / _Length_(q1), robust.Slerp(t, theta, denom) / _Length_(q2)
-
-		_Add_(qout, _Scale_(Qf, q1, k1), _Scale_(Qt, q2, k2))
-
-		return qout
-	end
+	local Qf, Qt = {}, {}, {}
 
 	--- DOCME
 	function M.Slerp (qout, q1, q2, t)
-		return AuxSlerp(qout, q1, q2, t)
-	end
+		_Normalize_(Qf, q1)
+		_Normalize_(Qt, q2)
 
+		local dot, k1, k2 = _Dot_(Qf, Qt)
+
+		if dot < 0 then
+			_Negate_(Qf, Qf)
+
+			dot = -dot
+		end
+
+		if dot > .95 then
+			k1, k2 = 1 - t, t
+		else
+			k1, k2 = robust.SlerpCoeffs(t, AuxAngleBetween(Qf, Qt))
+		end
+
+		_Add_Scaled_(qout, _Scale_(Qf, Qf, k1), Qt, k2)
+
+		return _Normalize_(qout, qout)
+	end
+end
+
+do
 	local Qa, Qb = {}, {}
 
 	--- DOCME
 	function M.SquadQ2S2 (qout, q1, q2, s1, s2, t)
-		return AuxSlerp(qout, AuxSlerp(Qa, q1, q2, t), AuxSlerp(Qb, s1, s2, t), 2 * t * (1 - t))
+		return _Slerp_(qout, _Slerp_(Qa, q1, q2, t), _Slerp_(Qb, s1, s2, t), 2 * t * (1 - t))
 	end
 end
 
@@ -260,14 +311,15 @@ function M.Sub (qout, q1, q2)
 end
 
 --
-AuxAngleBetween = robust.AngleBetween_OutParam(M.Dot, M.Length, M.Add, M.Negate)
+AuxAngleBetween = robust.AngleBetween(M.Dot, M.Length, M.Sub)
 
 -- Cache module members.
 _Add_ = M.Add
-_AngleBetween_ = M.AngleBetween
+_Add_Scaled_ = M.Add_Scaled
 _Conjugate_ = M.Conjugate
 _Dot_ = M.Dot
 _Exp_ = M.Exp
+_FromAxisAngle_ = M.FromAxisAngle
 _Inverse_ = M.Inverse
 _Length_ = M.Length
 _Log_ = M.Log
@@ -275,6 +327,7 @@ _Multiply_ = M.Multiply
 _Negate_ = M.Negate
 _Normalize_ = M.Normalize
 _Scale_ = M.Scale
+_Slerp_ = M.Slerp
 _SquadAuxQuats_ = M.SquadAuxQuats
 _SquadQ2S2_ = M.SquadQ2S2
 
