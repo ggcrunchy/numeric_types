@@ -102,7 +102,7 @@ end
 
 --- DOCME
 function M.Difference (qout, q1, q2)
-	return _Multiply_(qout, _Conjugate_(qout, q1), q2)
+	return _Multiply_(qout, _Inverse_(qout, q1), q2)
 end
 
 --- DOCME
@@ -283,8 +283,8 @@ do
 	--- DOCME
 	function M.SquadAuxQuats (qout, qprev, q, qnext)
 		_Inverse_(Qi, q)
-		_Log_(Log1, _Multiply_(Log1, qprev, Qi))
-		_Log_(Log2, _Multiply_(Log2, qnext, Qi))
+		_Log_(Log1, _Multiply_(Log1, Qi, qprev))
+		_Log_(Log2, _Multiply_(Log2, Qi, qnext))
 		_Scale_(Sum, _Add_(Sum, Log1, Log2), -.25)
 
 		return _Multiply_(qout, _Exp_(Sum, Sum), q)
