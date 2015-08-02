@@ -1,4 +1,15 @@
---- Quaternion utilities.
+--- Some operations on quaternions.
+--
+-- A **Quaternion** is a table (or object with **__index** and **__newindex** metamethods)
+-- with **x**, **y**, **z**, and **w** components, each being a **number**.
+--
+-- All functions are able to take any combination of their **Quaternion** arguments. Namely,
+-- the same **Quaternion** may be passed multiple times without incident. Any routine that
+-- produces a **Quaternion** will place it in its _qout_ argument (which is also returned, to
+-- allow for easy composition). An argument may be both a pure input and _qout_; _qout_ is
+-- only written once the necessary values have been read.
+
+-- @todo Method variants, as with complex numbers?
 
 --
 -- Permission is hereby granted, free of charge, to any person obtaining
@@ -51,13 +62,15 @@ local _Negate_
 local _Normalize_
 local _Scale_
 local _Slerp_
-local _SquadAuxQuats_
-local _SquadQ2S2_ 
 
 -- Exports --
 local M = {}
 
---- DOCME
+--- Adds quaternions _q1_ and _q2_.
+-- @tparam Quaternion qout _q1_ + _q2_.
+-- @tparam Quaternion q1 Addend #1...
+-- @tparam Quaternion q2 ...and #2.
+-- @treturn Quaternion _qout_.
 function M.Add (qout, q1, q2)
 	qout.x = q1.x + q2.x
 	qout.y = q1.y + q2.y
@@ -67,7 +80,12 @@ function M.Add (qout, q1, q2)
 	return qout
 end
 
---- DOCME
+--- Adds quaternions _q1_ and a scaled _q2_.
+-- @tparam Quaternion qout _q1_ + _q2_ * _k_.
+-- @tparam Quaternion q1 Addend #1...
+-- @tparam Quaternion q2 ...and #2.
+-- @number Scale factor.
+-- @treturn Quaternion _qout_.
 function M.Add_Scaled (qout, q1, q2, k)
 	qout.x = q1.x + q2.x * k
 	qout.y = q1.y + q2.y * k
@@ -83,7 +101,10 @@ local AuxAngleBetween
 do
 	local A1, A2, TwoPi = {}, {}, 2 * pi
 
-	--- DOCME
+	--- Gives the angle between two quaternions.
+	-- @tparam Quaternion q1 Quaternion #1...
+	-- @tparam Quaternion q2 ...and #2.
+	-- @treturn number Shorter angle between _q1_ and _q2_.
 	function M.AngleBetween (q1, q2)
 		local angle = 2 * AuxAngleBetween(_Normalize_(A1, q1), _Normalize_(A2, q2))
 
@@ -91,7 +112,10 @@ do
 	end
 end
 
---- DOCME
+--- Computes the conjugate of _q_.
+-- @tparam Quaternion qout Conjugate.
+-- @tparam Quaternion q
+-- @treturn Quaternion _qout_.
 function M.Conjugate (qout, q)
 	qout.x = -q.x
 	qout.y = -q.y
@@ -104,19 +128,31 @@ end
 do
 	local Qi = {}
 
-	--- DOCME
+	--- Computes the quaternion _diff_ such that _q1_ * _diff_ = _q2_.
+	-- @tparam Quaternion qout Difference.
+	-- @tparam Quaternion q1 Initial quaternion.
+	-- @tparam Quaternion q2 Final quaternion.
+	-- @treturn Quaternion _qout_.
 	function M.Difference (qout, q1, q2)
 		return _Multiply_(qout, _Inverse_(Qi, q1), q2)
 	end
 end
 
---- DOCME
+--- Dot product of _q1_ and _q2_.
+-- @tparam Quaternion q1 Quaternion #1...
+-- @tparam Quaternion q2 ...and #2.
+-- @treturn number Dot product.
 function M.Dot (q1, q2)
 	return q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w
 end
 
---- DOCME
--- q = [a, theta * v], len(v) = 1 -> [e^a*cos(theta), e^a*sin(theta) * v]
+--- Computes the exponential of _q_.
+--
+-- Given _q_ = [**w**, _theta_ * _v_] (with _v_ a unit vector), the exponential is defined as
+-- [cos(_theta_), sin(_theta_) * _v_] * _e_<sup>**w**</sup>.
+-- @tparam Quaternion qout `exp(q)`.
+-- @tparam Quaternion q
+-- @treturn Quaternion _qout_.
 function M.Exp (qout, q)
 	local qx, qy, qz, ew = q.x, q.y, q.z, exp(q.w)
 	local vnorm = sqrt(qx^2 + qy^2 + qz^2)
@@ -127,7 +163,15 @@ function M.Exp (qout, q)
 	return qout
 end
 
---- DOCME
+--- Builds a quaternion representing a rotation around an axis.
+--
+-- The axis does not need to be normalized.
+-- @tparam Quaternion qout Rotation.
+-- @number angle Rotation angle, in radians.
+-- @number vx Axis x-component...
+-- @number vy ...y-component...
+-- @number vz ...and z-component.
+-- @treturn Quaternion _qout_.
 function M.FromAxisAngle (qout, angle, vx, vy, vz)
 	angle = .5 * angle
 
@@ -148,7 +192,15 @@ do
 		zyx = function(x, y, z) return z, y, x end
 	}, {}
 
-	--- DOCME
+	--- Builds a quaternion representation of a sequence of rotations around the unit axes.
+	-- @tparam Quaternion qout Rotation.
+	-- @number x Angle around the x-axis...
+	-- @number y ...around the y-axis...
+	-- @number z ...and around the z-axis.
+	-- @string[opt="xyz"] method One of **"xyz"**, **"xzw"**, **"yxz"**, **"yzx"**, **"zxy"**,
+	-- or **"zyx"**. Where _X_, _Y_, and _Z_ are the rotations around those axes, **"xyz"**
+	-- corresponds to _X_ * _Y_ * _Z_. The other methods follow likewise.
+	-- @treturn Quaternion _qout_.
 	function M.FromEulerAngles (qout, x, y, z, method)
 		local order = Order[method] or Order.xyz
 
@@ -168,18 +220,32 @@ do
 	end
 end
 
---- DOCME
+--- Computes the inverse of a (non-zero) quaternion, i.e. the quaternion _q_<sup>-1</sup>
+-- such that _q_<sup>-1</sup> * _q_ or _q_ * _q_<sup>-1</sup> gives identity quaternion _I_
+-- (**x** = **y** = **z** = 0, **w** = 1).
+--
+-- Given quaternion _Q_, _I_ * _Q_ or _Q_ * _I_ yield back _Q_.
+-- @tparam Quaternion qout Inverse.
+-- @tparam Quaternion q
+-- @treturn Quaternion _qout_.
 function M.Inverse (qout, q)
 	return _Normalize_(qout, _Conjugate_(qout, q))
 end
 
---- DOCME
+--- Length of quaternion _q_.
+-- @tparam Quaternion q
+-- @treturn number Length.
 function M.Length (q)
 	return sqrt(q.x^2 + q.y^2 + q.z^2 + q.w^2)
 end
 
---- DOCME
--- q = [len(q) * cos(theta), len(q) * sin(theta) * v] -> [ln(len(q)), acos(w / len(q)) * v], len(v) = 1
+--- Computes the logarithm of _q_.
+--
+-- Given _q_ = [cos(_theta_), sin(_theta_) * _v_] * length(_q_), the logarithm is defined as
+-- [ln(length(_q_)), _theta_ * _v_ / length(_v_)].
+-- @tparam Quaternion qout `log(q)`.
+-- @tparam Quaternion q
+-- @treturn Quaternion _qout_.
 function M.Log (qout, q)
 	-- Adapted from:
 	-- https://github.com/numpy/numpy-dtypes/blob/76da931005a088f9e5f75d8ea2d58428cad2a975/npytypes/quaternion/quaternion.c#L121
@@ -200,7 +266,11 @@ function M.Log (qout, q)
 	return qout
 end
 
---- DOCME
+--- Multiplies quaternions _q1_ and _q2_.
+-- @tparam Quaternion qout _q1_ * _q2_.
+-- @tparam Quaternion q1 Multiplier.
+-- @tparam Quaternion q2 Multiplicand.
+-- @treturn Quaternion _qout_.
 function M.Multiply (qout, q1, q2)
 	local x1, y1, z1, w1 = q1.x, q1.y, q1.z, q1.w
 	local x2, y2, z2, w2 = q2.x, q2.y, q2.z, q2.w
@@ -213,7 +283,10 @@ function M.Multiply (qout, q1, q2)
 	return qout
 end
 
---- DOCME
+--- Negates quaternion _q_.
+-- @tparam Quaternion qout _-q_.
+-- @tparam Quaternion q
+-- @treturn Quaternion _qout_.
 function M.Negate (qout, q)
 	qout.x = -q.x
 	qout.y = -q.y
@@ -223,12 +296,22 @@ function M.Negate (qout, q)
 	return qout
 end
 
---- DOCME
+--- Normalizes a (non-zero) quaternion.
+-- @tparam Quaternion qout _q_ scaled to length 1.
+-- @tparam Quaternion q Non-zero quaternion.
+-- @treturn Quaternion _qout_.
+-- @see Length
 function M.Normalize (qout, q)
 	return _Scale_(qout, q, 1 / _Length_(q))
 end
 
---- DOCME
+-- TODO: M.Power (qout, q, t)?
+
+--- Scales quaternion _q_.
+-- @tparam Quaternion qout _q_ * _k_.
+-- @tparam Quaternion q
+-- @number k Scale factor.
+-- @treturn Quaternion _qout_.
 function M.Scale (qout, q, k)
 	qout.x = q.x * k
 	qout.y = q.y * k
@@ -239,9 +322,17 @@ function M.Scale (qout, q, k)
 end
 
 do
-	local Qf, Qt = {}, {}, {}
+	local Qf, Qt = {}, {}
 
-	--- DOCME
+	--- Performs spherical linear interpolation from _q1_ to _q2_.
+	-- @tparam Quaternion qout Interpolated result.
+	-- @tparam Quaternion q1 Initial quaternion.
+	-- @tparam Quaternion q2 Final quaternion.
+	-- @number t Interpolation time.
+	--
+	-- At time _t_ = 0 or _t_ = 1, _qout_ will match _q1_ or _q2_ respectively. Times within
+	-- this range, on the other hand, yield quaternions between _q1_ and _q2_.
+	-- @treturn Quaternion _qout_.
 	function M.Slerp (qout, q1, q2, t)
 		_Normalize_(Qf, q1)
 		_Normalize_(Qt, q2)
@@ -266,20 +357,14 @@ do
 	end
 end
 
-do
-	local Qa, Qb = {}, {}
-
-	--- DOCME
-	function M.SquadQ2S2 (qout, q1, q2, s1, s2, t)
-		return _Slerp_(qout, _Slerp_(Qa, q1, q2, t), _Slerp_(Qb, s1, s2, t), 2 * t * (1 - t))
-	end
-end
+-- Forward references --
+local AuxSquadQuats, AuxSquad
 
 do
 	local Qi, Log1, Log2, Sum = {}, {}, {}, {}
 
-	--- DOCME
-	function M.SquadAuxQuats (qout, qprev, q, qnext)
+	-- Helper to generate intermediate squad quaternions
+	function AuxSquadQuats (qout, qprev, q, qnext)
 		_Inverse_(Qi, q)
 		_Log_(Log1, _Multiply_(Log1, Qi, qprev))
 		_Log_(Log2, _Multiply_(Log2, Qi, qnext))
@@ -290,15 +375,48 @@ do
 end
 
 do
-	local S1, S2 = {}, {}
+	local Qa, Qb = {}, {}
 
-	--- DOCME
-	function M.SquadQ4 (qout, q1, q2, q3, q4, t)
-		return _SquadQ2S2_(qout, q2, q3, _SquadAuxQuats_(S1, q1, q2, q3), _SquadAuxQuats_(S2, q2, q3, q4), t)
+	-- Core squad computation
+	function AuxSquad (qout, q1, q2, s1, s2, t)
+		return _Slerp_(qout, _Slerp_(Qa, q1, q2, t), _Slerp_(Qb, s1, s2, t), 2 * t * (1 - t))
 	end
 end
 
---- DOCME
+do
+	local S1, S2 = {}, {}
+
+	--- Performs spherical quadrangle interpolation between four quaternions.
+	--
+	-- Quaternions _q1_, _q2_, _q3_, and _q4_ are understood to be in order.
+	--
+	-- Useful results will typically be sought between _q2_ and _q3_, with _q1_ and _q4_
+	-- being used to guide the shape of the path.
+	-- @tparam Quaternion qout Interpolated result.
+	-- @tparam Quaternion q1 Quaternion #1...
+	-- @tparam Quaternion q2 ...quaternion #2...
+	-- @tparam Quaternion q3 ...quaternion #3...
+	-- @tparam Quaternion q4 ...and #4.
+	-- @number t Interpolation time.
+	--
+	-- At time _t_ = 0 or _t_ = 1, _qout_ will match _q2_ or _q3_ respectively. Times within
+	-- this range, on the other hand, yield quaternions between _q2_ and _q3_.
+	--
+	-- Furthermore, _t_ = 0 aligns with _t_ = 1 in the interval (_q0_, _q1_, _q2_, _q3_).
+	-- Likewise, _t_ = 1 corresponds to _t_ = 0 in the interval (_q2_, _q3_, _q4_, _q5_).
+	-- Owing to this and the interpolation's C&sup2; continuity, it is possible to gracefully
+	-- transition from one interval to another.
+	-- @treturn Quaternion _qout_.
+	function M.SquadQ4 (qout, q1, q2, q3, q4, t)
+		return AuxSquad(qout, q2, q3, AuxSquadQuats(S1, q1, q2, q3), AuxSquadQuats(S2, q2, q3, q4), t)
+	end
+end
+
+--- Subtracts quaternion _q2_ from _q1_.
+-- @tparam Quaternion qout _q1_ - _q2_.
+-- @tparam Quaternion q1 Minuend.
+-- @tparam Quaternion q2 Subtrahend.
+-- @treturn Quaternion _qout_.
 function M.Sub (qout, q1, q2)
 	qout.x = q1.x - q2.x
 	qout.y = q1.y - q2.y
@@ -308,7 +426,7 @@ function M.Sub (qout, q1, q2)
 	return qout
 end
 
---
+-- Helper to calculate angle between two quaternions
 AuxAngleBetween = robust.AngleBetween(M.Dot, M.Length, M.Sub)
 
 -- Cache module members.
@@ -327,8 +445,6 @@ _Negate_ = M.Negate
 _Normalize_ = M.Normalize
 _Scale_ = M.Scale
 _Slerp_ = M.Slerp
-_SquadAuxQuats_ = M.SquadAuxQuats
-_SquadQ2S2_ = M.SquadQ2S2
 
 -- Export the module.
 return M
