@@ -38,6 +38,7 @@ local robust = require("tektite_core.number.robust")
 -- Cached module references --
 local _Add_
 local _Add_Scaled_
+local _AngleBetween_
 local _Conjugate_
 local _Dot_
 local _Exp_
@@ -259,7 +260,7 @@ do
 		if dot > .95 then
 			k1, k2 = 1 - t, t
 		else
-			k1, k2 = robust.SlerpCoeffs(t, AuxAngleBetween(Qf, Qt))
+			k1, k2 = robust.SlerpCoeffs(t, _AngleBetween_(Qf, Qt))
 		end
 
 		_Add_Scaled_(qout, _Scale_(Qf, Qf, k1), Qt, k2)
@@ -316,6 +317,7 @@ AuxAngleBetween = robust.AngleBetween(M.Dot, M.Length, M.Sub)
 -- Cache module members.
 _Add_ = M.Add
 _Add_Scaled_ = M.Add_Scaled
+_AngleBetween_ = M.AngleBetween
 _Conjugate_ = M.Conjugate
 _Dot_ = M.Dot
 _Exp_ = M.Exp
