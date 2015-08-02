@@ -101,9 +101,13 @@ function M.Conjugate (qout, q)
 	return qout
 end
 
---- DOCME
-function M.Difference (qout, q1, q2)
-	return _Multiply_(qout, _Inverse_(qout, q1), q2)
+do
+	local Qi = {}
+
+	--- DOCME
+	function M.Difference (qout, q1, q2)
+		return _Multiply_(qout, _Inverse_(Qi, q1), q2)
+	end
 end
 
 --- DOCME
@@ -114,18 +118,11 @@ end
 --- DOCME
 -- q = [a, theta * v], len(v) = 1 -> [e^a*cos(theta), e^a*sin(theta) * v]
 function M.Exp (qout, q)
-	-- Adapted from:
-	-- https://github.com/numpy/numpy-dtypes/blob/76da931005a088f9e5f75d8ea2d58428cad2a975/npytypes/quaternion/quaternion.c#L135
 	local qx, qy, qz, ew = q.x, q.y, q.z, exp(q.w)
 	local vnorm = sqrt(qx^2 + qy^2 + qz^2)
+	local coeff = ew * robust.SinOverX(vnorm)
 
-	if vnorm > 1e-6 then
-		local coeff = ew * robust.SinOverX(vnorm)
-
-		qout.w, qout.x, qout.y, qout.z = ew * cos(vnorm), coeff * qx, coeff * qy, coeff * qz
-	else
-		qout.w, qout.x, qout.y, qout.z = ew, 0, 0, 0   
-	end
+	qout.w, qout.x, qout.y, qout.z = ew * cos(vnorm), coeff * qx, coeff * qy, coeff * qz
 
 	return qout
 end
