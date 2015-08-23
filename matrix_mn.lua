@@ -29,8 +29,8 @@ local setmetatable = setmetatable
 local sqrt = math.sqrt
 
 -- Cached module references --
+local _Columns_From_
 local _New_
-local _Zero_
 
 -- Exports --
 local M = {}
@@ -49,21 +49,41 @@ local function Index (matrix, row, col)
 end
 
 --
-local function Set (matrix, row, col, value)
-	matrix[Index(matrix, row, col)] = value
+local function NewPrep (nrows, ncols, out)
+	if out then
+		out:Resize(nrows, ncols)
+
+		return out
+	else
+		return _New_(nrows, ncols)
+	end
+end
+
+--
+local function ZeroPrep (nrows, ncols, out)
+	out = NewPrep(nrows, ncols, out)
+
+	for i = 1, nrows * ncols do
+		out[i] = 0
+	end
+
+	return out
 end
 
 --- DOCME
 -- @tparam MatrixMN A
 -- @tparam MatrixMN B
+-- @tparam[opt] MatrixMN out
 -- @treturn MatrixMN S
-function M.Add (A, B)
-	assert(A.m_rows == B.m_rows, "Mismatched rows")
-	assert(A.m_cols == B.m_cols, "Mismatched columns")
+function M.Add (A, B, out)
+	local nrows, ncols = A:GetDims()
 
-	local sum = _New_(A.m_rows, A.m_cols)
+	assert(nrows == B.m_rows, "Mismatched rows")
+	assert(ncols == B.m_cols, "Mismatched columns")
+-- TODO: zero-pad?
+	local sum = NewPrep(nrows, ncols, out)
 
-	for index = 1, A.m_rows * A.m_cols do
+	for index = 1, nrows * ncols do
 		sum[index] = A[index] + B[index]
 	end
 
@@ -74,60 +94,108 @@ end
 -- @tparam MatrixMN A
 -- @uint k1
 -- @uint k2
+-- @tparam[opt] MatrixMN out
 -- @treturn MatrixMN C
-function M.Columns (A, k1, k2)
-	local dc, nrows = 1 - k1, A.m_rows
-	local cols = _New_(nrows, k2 + dc)
+function M.Columns (A, k1, k2, out)
+	return _Columns_From_(A, k1, k2, 1, out)
+end
 
-	for r = 1, nrows do
-		for c = k1, k2 do
-			Set(cols, r, c + dc, A(r, c))
-		end
+--- DOCME
+-- @tparam MatrixMN A
+-- @uint k1
+-- @uint k2
+-- @uint from
+-- @tparam[opt] MatrixMN out
+-- @treturn MatrixMN C
+function M.Columns_From (A, k1, k2, from, out)
+	local nrows, ncols = A.m_rows, A.m_cols
+	local w, skip, inc = k2 - k1 + 1
+
+	if k2 < k1 then
+		skip, inc = ncols + 1, -1
+	else
+		skip, inc = ncols - w, 1
 	end
 
-	return cols
+	out = NewPrep(nrows - from + 1, w, out)
+
+	local index, ai = 1
+
+	for row = from, nrows do
+		ai = ai or Index(A, row, k1)
+
+		for _ = 1, w do
+			out[index], index, ai = A[ai], index + 1, ai + inc
+		end
+
+		ai = ai + skip
+	end
+
+	return out
 end
 
 --- DOCME
 -- @tparam MatrixMN A
 -- @uint row
 -- @uint col
+-- @tparam[opt] MatrixMN out
 -- @treturn MatrixMN C
-function M.Corner (A, row, col)
-	local ncols, nrows, index = A.m_cols, A.m_rows, 1
-	local from = _New_(A.m_rows - row + 1, A.m_cols - col + 1)
+function M.Corner (A, row, col, out)
+	local w, h = A.m_cols - col + 1, A.m_rows - row + 1
 
-	for r = row, nrows do
-		for c = col, ncols do
-			from[index], index = A(r, c), index + 1
+	out = NewPrep(h, w, out)
+
+	local index, ai, skip = 1, Index(A, row, col), col - 1
+
+	for _ = 1, h do
+		for _ = 1, w do
+			out[index], index, ai = A[ai], index + 1, ai + 1
 		end
+
+		ai = ai + skip
 	end
 
-	return from
+	return out
+end
+
+--- DOCME
+-- @tparam MatrixMN A
+-- @treturn number N
+function M.FrobeniusNorm (A)
+	local sum = 0
+
+	for i = 1, A.m_rows * A.m_cols do
+		sum = sum + A[i]^2
+	end
+
+	return sqrt(sum)
 end
 
 --- DOCME
 -- @uint n
+-- @tparam[opt] MatrixMN out
 -- @treturn MatrixMN m
-function M.Identity (n)
-	local id = _Zero_(n, n)
+function M.Identity (n, out)
+	out = ZeroPrep(n, n, out)
 
 	for i = 1, n * n, n + 1 do
-		id[i] = 1
+		out[i] = 1
 	end
 
-	return id
+	return out
 end
 
 --- DOCME
 -- @tparam MatrixMN A
 -- @tparam MatrixMN B
+-- @tparam[opt] MatrixMN out
 -- @treturn MatrixMN P
-function M.Mul (A, B)
-	assert(A.m_cols == B.m_rows, "Mismatched matrices")
+function M.Mul (A, B, out)
+	local m, n, len, index = A.m_rows, B.m_cols, A.m_cols, 1
 
-	local m, n, len = A.m_rows, B.m_cols, A.m_cols
-	local product, index = _New_(m, n), 1
+	assert(len == B.m_rows, "Mismatched matrices")
+
+	out = NewPrep(m, n, out)
 
 	for r = 1, m do
 		for c = 1, n do
@@ -137,39 +205,38 @@ function M.Mul (A, B)
 				sum = sum + A(r, i) * B(i, c)
 			end
 
-			product[index], index = sum, index + 1
+			out[index], index = sum, index + 1
 		end		
 	end
 
-	return product
+	return out
 end
 
 --- DOCME
--- @uint rows
--- @uint cols
+-- @uint nrows
+-- @uint ncols
 -- @treturn MatrixMN m
-function M.New (rows, cols)
-	return setmetatable({ m_cols = cols, m_rows = rows }, MatrixMethods)
+function M.New (nrows, ncols)
+	return setmetatable({ m_cols = ncols, m_rows = nrows }, MatrixMethods)
 end
 
 --- DOCME
 -- @tparam Vector v
 -- @tparam Vector w
+-- @tparam[opt] MatrixMN out
 -- @treturn MatrixMN S
-function M.OuterProduct (v, w)
-	local n = #v
+function M.OuterProduct (v, w, out)
+	local n1, n2, index = #v, #w, 1
 
-	assert(n == #w, "Mismatched vectors")
+	out = NewPrep(n1, n2, out)
 
-	local outer, index = _New_(n, n), 1
-
-	for i = 1, n do
-		for j = 1, n do
-			outer[index], index = v[i] * w[j], index + 1
+	for i = 1, n1 do
+		for j = 1, n2 do
+			out[index], index = v[i] * w[j], index + 1
 		end
 	end
 
-	return outer
+	return out
 end
 
 --- DOCME
@@ -194,66 +261,75 @@ end
 
 --- DOCME
 -- @tparam MatrixMN A
+-- @uint nrows
+-- @uint ncols
+function M.Resize (A, nrows, ncols)
+	A.m_rows, A.m_cols = nrows, ncols
+end
+
+--- DOCME
+-- @tparam MatrixMN A
 -- @number s
+-- @tparam[opt] MatrixMN out
 -- @treturn MatrixMN S
-function M.Scale (A, scale)
-	local ncols, nrows = A.m_cols, A.m_rows
-	local scaled = _New_(nrows, ncols)
+function M.Scale (A, scale, out)
+	local nrows, ncols = A.m_rows, A.m_cols
+
+	out = NewPrep(nrows, ncols, out)
 
 	for i = 1, ncols * nrows do
-		scaled[i] = A[i] * scale
+		out[i] = A[i] * scale
 	end
 
-	return scaled
+	return out
 end
 
 --- DOCME
 -- @tparam MatrixMN A
 -- @tparam MatrixMN B
+-- @tparam[opt] MatrixMN out
 -- @treturn MatrixMN D
-function M.Sub (A, B)
-	assert(A.m_rows == B.m_rows, "Mismatched rows")
-	assert(A.m_cols == B.m_cols, "Mismatched columns")
+function M.Sub (A, B, out)
+	local nrows, ncols = A.m_rows, A.m_cols
 
-	local diff = _New_(A.m_rows, A.m_cols)
+	assert(nrows == B.m_rows, "Mismatched rows")
+	assert(ncols == B.m_cols, "Mismatched columns")
+-- TODO: Zero-pad?
+	out = NewPrep(nrows, ncols, out)
 
-	for index = 1, A.m_rows * A.m_cols do
-		diff[index] = A[index] - B[index]
+	for index = 1, nrows * ncols do
+		out[index] = A[index] - B[index]
 	end
 
-	return diff
+	return out
 end
 
 --- DOCME
 -- @tparam MatrixMN A
+-- @tparam[opt] MatrixMN out
 -- @treturn MatrixMN T
-function M.Transpose (A)
-	local nrows, ncols = A.m_rows, A.m_cols
-	local trans = _New_(ncols, nrows)
+function M.Transpose (A, out)
+	local nrows, ncols, index = A.m_rows, A.m_cols, 1
+
+	out = NewPrep(ncols, nrows, out)
 
 	for col = 1, ncols do
-		local index = col
+		local ci = col
 
 		for _ = 1, nrows do
-			trans[#trans + 1], index = A[index], index + ncols
+			out[index], index, ci = A[ci], index + 1, ci + ncols
 		end
 	end
 
-	return trans
+	return out
 end
 
 --- DOCME
--- @uint rows
--- @uint cols
+-- @uint nrows
+-- @uint ncols
 -- @treturn MatrixMN m
-function M.Zero (rows, cols)
-	local matrix = _New_(rows, cols)
-
-	for i = 1, matrix.m_rows * matrix.m_cols do
-		matrix[i] = 0
-	end
-
-	return matrix
+function M.Zero (nrows, ncols)
+	return ZeroPrep(nrows, ncols)
 end
 
 -- Add methods.
@@ -266,12 +342,12 @@ do
 		return self[Index(self, row, col)]
 	end
 
-	-- GetDims()
 	-- IsVector(), IsScalar()?
 	-- Multiply(), TransposeMultiply()?
 	-- Rank()?
 	-- column, row length, length squared
 	-- column, row dot products
+	-- Plus(), Minus(), Times()...
 
 	--- DOCME
 	-- @uint col
@@ -292,13 +368,28 @@ do
 	-- @uint[opt=1] from
 	-- @treturn table C
 	function MatrixMethods:GetColumn (col, from)
-		local arr, index, ncols = {}, Index(self, from or 1, col), self.m_cols
+		local arr, ncols, index = {}, self.m_cols
 
 		for _ = from or 1, self.m_rows do
+			index = index or Index(self, from or 1, col)
+
 			arr[#arr + 1], index = self[index], index + ncols
 		end
 
 		return arr
+	end
+
+	--- DOCME
+	-- @treturn uint NCOLS
+	function MatrixMethods:GetColumnCount ()
+		return self.m_cols
+	end
+
+	--- DOCME
+	-- @treturn uint R
+	-- @treturn uint C
+	function MatrixMethods:GetDims ()
+		return self.m_rows, self.m_cols
 	end
 
 	--- DOCME
@@ -313,6 +404,12 @@ do
 		end
 
 		return arr
+	end
+
+	--- DOCME
+	-- @treturn uint NROWS
+	function MatrixMethods:GetRowCount ()
+		return self.m_rows
 	end
 
 	-- DOCME
@@ -332,16 +429,27 @@ do
 	-- ^^ TODO: Squared lengths?
 
 	--- DOCME
-	-- @function MatrixMethods:Set
 	-- @uint row
 	-- @uint col
-	-- @number X
-	MatrixMethods.Set = Set
+	-- @number value
+	function MatrixMethods:Set (row, col, value)
+		self[Index(self, row, col)] = value
+	end
+
+	--- DOCME
+	-- @uint row
+	-- @uint col
+	-- @number delta
+	function MatrixMethods:Update (row, col, delta)
+		local index = Index(self, row, col)
+
+		self[index] = self[index] + delta
+	end
 end
 
 -- Cache module members.
+_Columns_From_ = M.Columns_From
 _New_ = M.New
-_Zero_ = M.Zero
 
 -- Export the module.
 return M
