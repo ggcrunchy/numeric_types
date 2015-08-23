@@ -84,7 +84,7 @@ end
 -- @tparam Quaternion qout _q1_ + _q2_ * _k_.
 -- @tparam Quaternion q1 Addend #1...
 -- @tparam Quaternion q2 ...and #2.
--- @number Scale factor.
+-- @number k Scale factor.
 -- @treturn Quaternion _qout_.
 function M.Add_Scaled (qout, q1, q2, k)
 	qout.x = q1.x + q2.x * k

@@ -144,7 +144,7 @@ function M.Div (a, b, c, d)
 	return (a * c + b * d) / denom, (b * c - a * d) / denom
 end
 
---- Computes **e**^_z_.
+--- Computes **e**<sup>_z_</sup>.
 -- @number a Real part of _z_...
 -- @number b ...and complex part.
 -- @treturn number Real part of result...
@@ -242,7 +242,7 @@ function M.Normalize (a, b)
 	return a / mag, b / mag
 end
 
---- Computes _z^n_.
+--- Computes _z_<sup>_n_</sup>.
 -- @number a Real part of _z_...
 -- @number b ...and complex part.
 -- @number n Real exponent.
@@ -256,7 +256,7 @@ function M.Pow (a, b, n)
 	return r * cos(theta), r * sin(theta)
 end
 
---- Computes _z1^z2_.
+--- Computes _z1_<sup>_z2_</sup>.
 -- @number a Real part of _z1_...
 -- @number b ...and complex part.
 -- @number c Real part of _z2_...
@@ -273,7 +273,7 @@ function M.Pow_Complex (a, b, c, d)
 	return t * cos(b), t * sin(b)
 end
 
---- Computes _n^z_.
+--- Computes _n_<sup>_z_</sup>.
 -- @number n Real base.
 -- @number a Real part of _z_...
 -- @number b ...and complex part.

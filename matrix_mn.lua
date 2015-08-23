@@ -73,7 +73,7 @@ end
 --- DOCME
 -- @tparam MatrixMN A
 -- @tparam MatrixMN B
--- @tparam[opt] MatrixMN out
+-- @tparam[opt] MatrixMN out (can be A or B)
 -- @treturn MatrixMN S
 function M.Add (A, B, out)
 	local nrows, ncols = A:GetDims()
@@ -221,7 +221,7 @@ function M.New (nrows, ncols)
 end
 
 --- DOCME
--- @tparam Vector v
+-- @tparam Vector v (TODO: Accept 1-element matrices... need check?)
 -- @tparam Vector w
 -- @tparam[opt] MatrixMN out
 -- @treturn MatrixMN S
@@ -269,16 +269,16 @@ end
 
 --- DOCME
 -- @tparam MatrixMN A
--- @number s
--- @tparam[opt] MatrixMN out
+-- @number k
+-- @tparam[opt] MatrixMN out (can be A or B)
 -- @treturn MatrixMN S
-function M.Scale (A, scale, out)
+function M.Scale (A, k, out)
 	local nrows, ncols = A.m_rows, A.m_cols
 
 	out = NewPrep(nrows, ncols, out)
 
 	for i = 1, ncols * nrows do
-		out[i] = A[i] * scale
+		out[i] = A[i] * k
 	end
 
 	return out
@@ -287,7 +287,7 @@ end
 --- DOCME
 -- @tparam MatrixMN A
 -- @tparam MatrixMN B
--- @tparam[opt] MatrixMN out
+-- @tparam[opt] MatrixMN out (can be A or B)
 -- @treturn MatrixMN D
 function M.Sub (A, B, out)
 	local nrows, ncols = A.m_rows, A.m_cols
@@ -304,21 +304,32 @@ function M.Sub (A, B, out)
 	return out
 end
 
---- DOCME
+--- DOCME A<sup>T</sup>.
 -- @tparam MatrixMN A
 -- @tparam[opt] MatrixMN out
--- @treturn MatrixMN T
+-- @treturn MatrixMN A
 function M.Transpose (A, out)
 	local nrows, ncols, index = A.m_rows, A.m_cols, 1
 
-	out = NewPrep(ncols, nrows, out)
+	--
+	if A ~= out then
+		out = NewPrep(ncols, nrows, out)
 
-	for col = 1, ncols do
-		local ci = col
+		for col = 1, ncols do
+			local ci = col
 
-		for _ = 1, nrows do
-			out[index], index, ci = A[ci], index + 1, ci + ncols
+			for _ = 1, nrows do
+				out[index], index, ci = A[ci], index + 1, ci + ncols
+			end
 		end
+
+	-- Transpose self, vector case: just swap dimensions.
+	elseif ncols == 1 or nrows == 1 then
+		out.m_rows, out.m_cols = ncols, nrows
+
+	-- Transpose self, general.
+	else
+		assert(false, "NYI!") -- shouldn't actually be hard, just walk like Identity(), swap off-diagonal...
 	end
 
 	return out
