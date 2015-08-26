@@ -25,8 +25,10 @@
 
 -- Modules --
 local assert = assert
+local rawget = rawget
 local setmetatable = setmetatable
 local sqrt = math.sqrt
+local type = type
 
 -- Cached module references --
 local _Columns_From_
@@ -80,7 +82,7 @@ function M.Add (A, B, out)
 
 	assert(nrows == B.m_rows, "Mismatched rows")
 	assert(ncols == B.m_cols, "Mismatched columns")
--- TODO: zero-pad?
+-- TODO: zero-pad?  (if so, need to account for A or B being out)
 	local sum = NewPrep(nrows, ncols, out)
 
 	for index = 1, nrows * ncols do
@@ -172,6 +174,19 @@ function M.FrobeniusNorm (A)
 end
 
 --- DOCME
+-- @tparam MatrixMN A
+-- @treturn number N
+function M.FrobeniusNormSquared (A)
+	local sum = 0
+
+	for i = 1, A.m_rows * A.m_cols do
+		sum = sum + A[i]^2
+	end
+
+	return sum
+end
+
+--- DOCME
 -- @uint n
 -- @tparam[opt] MatrixMN out
 -- @treturn MatrixMN m
@@ -185,28 +200,35 @@ function M.Identity (n, out)
 	return out
 end
 
+--
+local function RowTimesColumn (A, B, ri, bi, n, len)
+	local sum = 0
+
+	for i = 1, len do
+		sum, bi = sum + A[ri + i] * B[bi], bi + n
+	end
+
+	return sum
+end
+
 --- DOCME
 -- @tparam MatrixMN A
 -- @tparam MatrixMN B
 -- @tparam[opt] MatrixMN out
 -- @treturn MatrixMN P
 function M.Mul (A, B, out)
-	local m, n, len, index = A.m_rows, B.m_cols, A.m_cols, 1
+	local m, n, len, ri, index = A.m_rows, B.m_cols, A.m_cols, 0, 1
 
 	assert(len == B.m_rows, "Mismatched matrices")
 
 	out = NewPrep(m, n, out)
 
-	for r = 1, m do
-		for c = 1, n do
-			local sum = 0
+	for _ = 1, m do
+		for col = 1, n do
+			out[index], index = RowTimesColumn(A, B, ri, col, n, len), index + 1
+		end
 
-			for i = 1, len do
-				sum = sum + A(r, i) * B(i, c)
-			end
-
-			out[index], index = sum, index + 1
-		end		
+		ri = ri + len
 	end
 
 	return out
@@ -220,13 +242,23 @@ function M.New (nrows, ncols)
 	return setmetatable({ m_cols = ncols, m_rows = nrows }, MatrixMethods)
 end
 
+--
+local function GetM (v)
+	return rawget(v, "m_rows") or #v
+end
+
+--
+local function GetN (v)
+	return rawget(v, "m_cols") or #v
+end
+
 --- DOCME
 -- @tparam Vector v (TODO: Accept 1-element matrices... need check?)
 -- @tparam Vector w
 -- @tparam[opt] MatrixMN out
 -- @treturn MatrixMN S
 function M.OuterProduct (v, w, out)
-	local n1, n2, index = #v, #w, 1
+	local n1, n2, index = GetM(v), GetN(w), 1
 
 	out = NewPrep(n1, n2, out)
 
@@ -270,7 +302,7 @@ end
 --- DOCME
 -- @tparam MatrixMN A
 -- @number k
--- @tparam[opt] MatrixMN out (can be A or B)
+-- @tparam[opt] MatrixMN out (can be A)
 -- @treturn MatrixMN S
 function M.Scale (A, k, out)
 	local nrows, ncols = A.m_rows, A.m_cols
@@ -294,7 +326,7 @@ function M.Sub (A, B, out)
 
 	assert(nrows == B.m_rows, "Mismatched rows")
 	assert(ncols == B.m_cols, "Mismatched columns")
--- TODO: Zero-pad?
+-- TODO: Zero-pad? (if so, need to account for A or B being out)
 	out = NewPrep(nrows, ncols, out)
 
 	for index = 1, nrows * ncols do
@@ -360,6 +392,15 @@ do
 	-- column, row dot products
 	-- Plus(), Minus(), Times()...
 
+	--
+	local function IterOpts (opts)
+		if type(opts) == "table" then
+			return opts.from, opts.to, opts.out
+		else
+			return opts or 1, 1
+		end
+	end
+
 	--- DOCME
 	-- @uint col
 	-- @uint[opt=1] from
@@ -376,18 +417,20 @@ do
 
 	--- DOCME
 	-- @uint col
-	-- @uint[opt=1] from
-	-- @treturn table C
-	function MatrixMethods:GetColumn (col, from)
-		local arr, ncols, index = {}, self.m_cols
+	-- @tparam[opt=1] ?|table|uint opts
+	-- @treturn MatrixMN C
+	function MatrixMethods:GetColumn (col, opts)
+		local from, to, out = IterOpts(opts)
+		local m, n = self.m_rows, self.m_cols
+		local index = Index(self, from, col)
 
-		for _ = from or 1, self.m_rows do
-			index = index or Index(self, from or 1, col)
+		out = NewPrep(m + to - from, 1, out)
 
-			arr[#arr + 1], index = self[index], index + ncols
+		for row = from, m do
+			out[to], to, index = self[index], to + 1, index + n
 		end
 
-		return arr
+		return out
 	end
 
 	--- DOCME
@@ -438,6 +481,10 @@ do
 	end
 
 	-- ^^ TODO: Squared lengths?
+	--- @function MatrixMethods:Resize
+	-- @uint nrows
+	-- @uint ncols
+	MatrixMethods.Resize = M.Resize
 
 	--- DOCME
 	-- @uint row
