@@ -78,7 +78,7 @@ end
 -- @tparam[opt] MatrixMN out (can be A or B)
 -- @treturn MatrixMN S
 function M.Add (A, B, out)
-	local nrows, ncols = A:GetDims()
+	local nrows, ncols = A.m_rows, A.m_cols
 
 	assert(nrows == B.m_rows, "Mismatched rows")
 	assert(ncols == B.m_cols, "Mismatched columns")
@@ -90,6 +90,30 @@ function M.Add (A, B, out)
 	end
 
 	return sum
+end
+
+-- TODO: Add back-substitution
+function M.BackSubstitute (A, Y, out)
+	local ncols = A.m_cols
+
+	assert(ncols == Y.m_rows, "Mismatched matrix and vector")
+	assert(Y.m_cols == 1, "Non-column vector")
+
+	out = NewPrep(ncols, 1, out)
+
+	local ri, dr, w = ncols * A.m_rows, ncols + 1, 0
+
+	for row = ncols, 1, -1 do
+		local sum = 0
+
+		for dc = 1, w do
+			sum = sum + A[ri + dc] * out[row + dc]
+		end
+
+		out[row], ri, w = (Y[row] - sum) / A[ri], ri - dr, w + 1
+	end
+
+	return out
 end
 
 --- DOCME
@@ -361,7 +385,22 @@ function M.Transpose (A, out)
 
 	-- Transpose self, general.
 	else
-		assert(false, "NYI!") -- shouldn't actually be hard, just walk like Identity(), swap off-diagonal...
+		assert(false, "NYI!")
+		--[[
+		for each length>1 cycle C of the permutation
+			pick a starting address s in C
+			let D = data at s
+			let x = predecessor of s in the cycle
+			while x ≠ s
+				move data from x to successor of x
+				let x = predecessor of x
+			move data from D to successor of s
+
+			A B C D	 	A E I	1 2 3 4		1 5 9	11 12 13 14		11 21 31
+			E F G H ->	B F J	5 6 7 8 ->	2 6 A	21 22 23 24 ->	12 22 32
+			I J K L		C G K	9 A B C		3 7 B	31 32 33 34		13 23 33
+						D H L				4 8 C					14 24 34
+		]]
 	end
 
 	return out
@@ -394,11 +433,13 @@ do
 
 	--
 	local function IterOpts (opts)
+		local from, to, out
+
 		if type(opts) == "table" then
-			return opts.from, opts.to, opts.out
-		else
-			return opts or 1, 1
+			from, to, out = opts.from, opts.to, opts.out
 		end
+
+		return from or 1, to or 1, out
 	end
 
 	--- DOCME
