@@ -33,6 +33,8 @@ local type = type
 -- Cached module references --
 local _Columns_From_
 local _New_
+local _NewOrResize_
+local _Resize_
 
 -- Exports --
 local M = {}
@@ -264,6 +266,29 @@ end
 -- @treturn MatrixMN m
 function M.New (nrows, ncols)
 	return setmetatable({ m_cols = ncols, m_rows = nrows }, MatrixMethods)
+end
+
+--- DOCME
+-- @uint nrows
+-- @uint ncols
+-- @tparam[opt] MatrixMN out
+-- @treturn MatrixMN m
+function M.NewOrResize (A, out)
+	if out then
+		_Resize_(out, A.m_rows, A.m_cols)
+
+		return out
+	else
+		return _New_(A.m_rows, A.m_cols)
+	end
+end
+
+--- DOCME
+-- @tparam MatrixMN A
+-- @tparam[opt] MatrixMN out
+-- @treturn MatrixMN m
+function M.NewOrResize_Matrix (A, out)
+	return _NewOrResize_(A.m_rows, A.m_cols, out)
 end
 
 --
@@ -549,6 +574,8 @@ end
 -- Cache module members.
 _Columns_From_ = M.Columns_From
 _New_ = M.New
+_NewOrResize_ = M.NewOrResize
+_Resize_ = M.Resize
 
 -- Export the module.
 return M
