@@ -53,19 +53,8 @@ local function Index (matrix, row, col)
 end
 
 --
-local function NewPrep (nrows, ncols, out)
-	if out then
-		out:Resize(nrows, ncols)
-
-		return out
-	else
-		return _New_(nrows, ncols)
-	end
-end
-
---
 local function ZeroPrep (nrows, ncols, out)
-	out = NewPrep(nrows, ncols, out)
+	out = _NewOrResize_(nrows, ncols, out)
 
 	for i = 1, nrows * ncols do
 		out[i] = 0
@@ -85,7 +74,7 @@ function M.Add (A, B, out)
 	assert(nrows == B.m_rows, "Mismatched rows")
 	assert(ncols == B.m_cols, "Mismatched columns")
 -- TODO: zero-pad?  (if so, need to account for A or B being out)
-	local sum = NewPrep(nrows, ncols, out)
+	local sum = _NewOrResize_(nrows, ncols, out)
 
 	for index = 1, nrows * ncols do
 		sum[index] = A[index] + B[index]
@@ -94,14 +83,18 @@ function M.Add (A, B, out)
 	return sum
 end
 
--- TODO: Add back-substitution
+--- DOCME
+-- @tparam MatrixMN A
+-- @tparam Vector Y
+-- @tparam[opt] MatrixMN out
+-- @treturn MatrixMN B
 function M.BackSubstitute (A, Y, out)
 	local ncols = A.m_cols
 
 	assert(ncols == Y.m_rows, "Mismatched matrix and vector")
 	assert(Y.m_cols == 1, "Non-column vector")
 
-	out = NewPrep(ncols, 1, out)
+	out = _NewOrResize_(ncols, 1, out)
 
 	local ri, dr, w = ncols * A.m_rows, ncols + 1, 0
 
@@ -145,7 +138,7 @@ function M.Columns_From (A, k1, k2, from, out)
 		skip, inc = ncols - w, 1
 	end
 
-	out = NewPrep(nrows - from + 1, w, out)
+	out = _NewOrResize_(nrows - from + 1, w, out)
 
 	local index, ai = 1
 
@@ -171,7 +164,7 @@ end
 function M.Corner (A, row, col, out)
 	local w, h = A.m_cols - col + 1, A.m_rows - row + 1
 
-	out = NewPrep(h, w, out)
+	out = _NewOrResize_(h, w, out)
 
 	local index, ai, skip = 1, Index(A, row, col), col - 1
 
@@ -247,7 +240,7 @@ function M.Mul (A, B, out)
 
 	assert(len == B.m_rows, "Mismatched matrices")
 
-	out = NewPrep(m, n, out)
+	out = _NewOrResize_(m, n, out)
 
 	for _ = 1, m do
 		for col = 1, n do
@@ -273,13 +266,13 @@ end
 -- @uint ncols
 -- @tparam[opt] MatrixMN out
 -- @treturn MatrixMN m
-function M.NewOrResize (A, out)
+function M.NewOrResize (nrows, ncols, out)
 	if out then
-		_Resize_(out, A.m_rows, A.m_cols)
+		_Resize_(out, nrows, ncols)
 
 		return out
 	else
-		return _New_(A.m_rows, A.m_cols)
+		return _New_(nrows, ncols)
 	end
 end
 
@@ -309,7 +302,7 @@ end
 function M.OuterProduct (v, w, out)
 	local n1, n2, index = GetM(v), GetN(w), 1
 
-	out = NewPrep(n1, n2, out)
+	out = _NewOrResize_(n1, n2, out)
 
 	for i = 1, n1 do
 		for j = 1, n2 do
@@ -356,7 +349,7 @@ end
 function M.Scale (A, k, out)
 	local nrows, ncols = A.m_rows, A.m_cols
 
-	out = NewPrep(nrows, ncols, out)
+	out = _NewOrResize_(nrows, ncols, out)
 
 	for i = 1, ncols * nrows do
 		out[i] = A[i] * k
@@ -376,7 +369,7 @@ function M.Sub (A, B, out)
 	assert(nrows == B.m_rows, "Mismatched rows")
 	assert(ncols == B.m_cols, "Mismatched columns")
 -- TODO: Zero-pad? (if so, need to account for A or B being out)
-	out = NewPrep(nrows, ncols, out)
+	out = _NewOrResize_(nrows, ncols, out)
 
 	for index = 1, nrows * ncols do
 		out[index] = A[index] - B[index]
@@ -394,7 +387,7 @@ function M.Transpose (A, out)
 
 	--
 	if A ~= out then
-		out = NewPrep(ncols, nrows, out)
+		out = _NewOrResize_(ncols, nrows, out)
 
 		for col = 1, ncols do
 			local ci = col
@@ -490,9 +483,9 @@ do
 		local m, n = self.m_rows, self.m_cols
 		local index = Index(self, from, col)
 
-		out = NewPrep(m + to - from, 1, out)
+		out = _NewOrResize_(m + to - from, 1, out)
 
-		for row = from, m do
+		for _ = from, m do
 			out[to], to, index = self[index], to + 1, index + n
 		end
 
