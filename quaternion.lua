@@ -229,7 +229,7 @@ end
 -- @tparam Quaternion q
 -- @treturn Quaternion _qout_.
 function M.Inverse (qout, q)
-	return _Normalize_(qout, _Conjugate_(qout, q))
+	return _Scale_(qout, _Conjugate_(qout, q), 1 / _Dot_(q, q))
 end
 
 --- Length of quaternion _q_.
@@ -407,7 +407,7 @@ do
 	-- Owing to this and the interpolation's C&sup2; continuity, it is possible to gracefully
 	-- transition from one interval to another.
 	-- @treturn Quaternion _qout_.
-	function M.SquadQ4 (qout, q1, q2, q3, q4, t)
+	function M.Squad (qout, q1, q2, q3, q4, t)
 		return AuxSquad(qout, q2, q3, AuxSquadQuats(S1, q1, q2, q3), AuxSquadQuats(S2, q2, q3, q4), t)
 	end
 end
